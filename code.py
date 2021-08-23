@@ -1,41 +1,86 @@
 import json
-import wifi
-import socketpool
-import board
-import time
+import os
 import ssl
+import time
+
+import adafruit_minimqtt.adafruit_minimqtt as MQTT
+import adafruit_requests
+import board
+import microcontroller
 import socketpool
 import wifi
-import adafruit_minimqtt.adafruit_minimqtt as MQTT
+from microcontroller import watchdog as w
+from watchdog import WatchDogMode
+
 from config import Config
 
+VERSION = "2.0"
+
+# configure watchdog
+w.timeout = 10
+w.mode = WatchDogMode.RESET
+w.feed()
+
+# initiate I2C
 i2c = board.I2C()
-wifi.radio.connect(Config.wifi_ssid)
+
+# Create a couple of socket pools
+mqtt_pool = socketpool.SocketPool(wifi.radio)
+http_pool = socketpool.SocketPool(wifi.radio)
+
+# prepare requests
+requests = adafruit_requests.Session(http_pool, ssl.create_default_context())
+
+
+def check_for_update():
+    new_code = requests.get(
+        "https://raw.githubusercontent.com/tykling/circuitpython-feathers2-zio-qwiic-noisesensor/main/code.py"
+    )
+    with open("/code.py") as f:
+        current_code = f.read()
+
+    if new_code.text != current_code:
+        # take a backup of the current code
+        os.copy("/code.py", "/old_code.py")
+        # write the new code to storage
+        with open("/new_code.py", "w") as f:
+            f.write(new_code.text)
+        # rename so we get that atomic goodness
+        os.rename("/new_code.py", "/code.py")
+        print("wrote new code to /code.py and saved the old in old_code.py, rebooting")
+        # reboot so we start using the new code
+        microcontroller.reset()
+    else:
+        print("current /code.py is identical with the one on github, no update needed")
+        return time.time()
+
+
+def connect_wifi():
+    # initiate wifi
+    wifi.radio.connect(Config.wifi_ssid)
+    print("got wifi IP: %s" % wifi.radio.ipv4_address)
+
 
 def connected(client, userdata, flags, rc):
-    # This function will be called when the client is connected
-    # successfully to the broker.
     print("Connected to mqtt")
 
 
 def disconnected(client, userdata, rc):
-    # This method is called when the client is disconnected
     print("Disconnected from mqtt")
 
 
 def message(client, topic, message):
-    # This method is called when a topic the client is subscribed to
-    # has a new message.
     print("New message on topic {0}: {1}".format(topic, message))
 
-# Create a socket pool
-pool = socketpool.SocketPool(wifi.radio)
+
+# do an initial update check
+updatetime = check_for_update()
 
 # Set up a MiniMQTT Client
 mqtt_client = MQTT.MQTT(
     broker=Config.mqtt_broker_hostname,
     port=Config.mqtt_broker_port,
-    socket_pool=pool,
+    socket_pool=mqtt_pool,
     ssl_context=ssl.create_default_context(),
 )
 
@@ -49,18 +94,49 @@ print("Connecting to mqtt broker...")
 mqtt_client.connect()
 
 noiselevel = bytearray(2)
-while True:
-    # Poll the message queue
-    mqtt_client.loop()
+sendtime = 0
+readings = []
+try:
+    while True:
+        # check for updates?
+        if time.time() > updatetime + 3600:
+            # more than an hour has passed
+            updatetime = check_for_update()
+        # get sensor value
+        while not i2c.try_lock():
+            pass
+        i2c.writeto_then_readfrom(0x38, bytearray([0x05]), noiselevel)
+        i2c.unlock()
+        value = noiselevel[1] << 8 | noiselevel[0]
+        readings.append(value)
+        # print("got raw value: %s which is decimal %s" % (noiselevel, value))
 
-    # get sensor value
-    while not i2c.try_lock():
-        pass
-    i2c.writeto_then_readfrom(0x38, bytearray([0x05]), noiselevel)
-    i2c.unlock()
-    value = noiselevel[1] << 8 | noiselevel[0]
-    #print("got raw value: %s which is decimal %s" % (noiselevel, value))
+        # is it time to send?
+        if time.time() > sendtime + Config.send_interval_seconds:
+            message = {
+                "metadata": {
+                    "version": VERSION,
+                },
+                "min": min(readings),
+                "max": max(readings),
+                "avg": sum(readings) / len(readings),
+                "readings": readings,
+                "noiselevel": max(readings),
+            }
+            if not mqtt_client.ping():
+                print("not connected to mqtt, rebooting")
+                microcontroller.reset()
+            print("sending message to mqtt: %s" % message)
+            mqtt_client.publish(Config.mqtt_topic, json.dumps(message))
 
-    # Send mqtt message
-    mqtt_client.publish(Config.mqtt_topic, json.dumps({"noiselevel": value}))
+            # record time and reset readings
+            sendtime = time.time()
+            readings = []
+
+        # feed the dog and sleep for a bit
+        w.feed()
+        time.sleep(Config.sensor_interval_seconds)
+except Exception as E:
+    print("got exception, rebooting in 5s: %s" % E)
     time.sleep(5)
+    microcontroller.reset()
