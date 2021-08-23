@@ -15,7 +15,7 @@ from watchdog import WatchDogMode
 
 from config import Config
 
-VERSION = "2.3"
+VERSION = "2.4"
 UPDATEURL = "https://raw.githubusercontent.com/tykling/circuitpython-feathers2-zio-qwiic-noisesensor/main/code.py"
 
 # configure watchdog
@@ -132,13 +132,13 @@ try:
             print("sending message to mqtt: %s" % message)
             mqtt_client.publish(Config.mqtt_topic, json.dumps(message))
 
-            # record time and reset readings
+            # record time, blink the LED, and reset readings
             sendtime = time.time()
+            blink_led()
             readings = []
 
-        # feed the dog, blink the LED, and sleep for a bit
+        # feed the dog and sleep for a bit
         w.feed()
-        blink_led()
         time.sleep(Config.sensor_interval_seconds)
 except Exception as E:
     print("got exception, rebooting in 5s: %s" % E)
