@@ -24,12 +24,11 @@ w.feed()
 # initiate I2C
 i2c = board.I2C()
 
-# Create a couple of socket pools
-mqtt_pool = socketpool.SocketPool(wifi.radio)
-http_pool = socketpool.SocketPool(wifi.radio)
+# Create a socket pool
+pool = socketpool.SocketPool(wifi.radio)
 
 # prepare requests
-requests = adafruit_requests.Session(http_pool, ssl.create_default_context())
+requests = adafruit_requests.Session(pool, ssl.create_default_context())
 
 
 def check_for_update():
@@ -40,12 +39,11 @@ def check_for_update():
         current_code = f.read()
 
     if new_code.text != current_code:
-        # take a backup of the current code
-        os.copy("/code.py", "/old_code.py")
         # write the new code to storage
         with open("/new_code.py", "w") as f:
             f.write(new_code.text)
-        # rename so we get that atomic goodness
+        # switch to using the new code
+        os.rename("/code.py", "/old_code.py")
         os.rename("/new_code.py", "/code.py")
         print("wrote new code to /code.py and saved the old in old_code.py, rebooting")
         # reboot so we start using the new code
@@ -56,7 +54,6 @@ def check_for_update():
 
 
 def connect_wifi():
-    # initiate wifi
     wifi.radio.connect(Config.wifi_ssid)
     print("got wifi IP: %s" % wifi.radio.ipv4_address)
 
@@ -72,6 +69,7 @@ def disconnected(client, userdata, rc):
 def message(client, topic, message):
     print("New message on topic {0}: {1}".format(topic, message))
 
+connect_wifi()
 
 # do an initial update check
 updatetime = check_for_update()
@@ -80,7 +78,7 @@ updatetime = check_for_update()
 mqtt_client = MQTT.MQTT(
     broker=Config.mqtt_broker_hostname,
     port=Config.mqtt_broker_port,
-    socket_pool=mqtt_pool,
+    socket_pool=pool,
     ssl_context=ssl.create_default_context(),
 )
 
