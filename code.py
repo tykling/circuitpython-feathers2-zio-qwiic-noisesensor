@@ -14,7 +14,8 @@ from watchdog import WatchDogMode
 
 from config import Config
 
-VERSION = "2.0"
+VERSION = "2.1"
+UPDATEURL = "https://raw.githubusercontent.com/tykling/circuitpython-feathers2-zio-qwiic-noisesensor/main/code.py"
 
 # configure watchdog
 w.timeout = 10
@@ -30,11 +31,9 @@ pool = socketpool.SocketPool(wifi.radio)
 # prepare requests
 requests = adafruit_requests.Session(pool, ssl.create_default_context())
 
-
 def check_for_update():
-    new_code = requests.get(
-        "https://raw.githubusercontent.com/tykling/circuitpython-feathers2-zio-qwiic-noisesensor/main/code.py"
-    )
+    print("Checking for updates at %s" % UPDATEURL)
+    new_code = requests.get(UPDATEURL)
     with open("/code.py") as f:
         current_code = f.read()
 
