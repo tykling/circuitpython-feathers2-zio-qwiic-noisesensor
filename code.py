@@ -6,6 +6,7 @@ import time
 import adafruit_minimqtt.adafruit_minimqtt as MQTT
 import adafruit_requests
 import board
+import feathers2
 import microcontroller
 import socketpool
 import wifi
@@ -67,6 +68,11 @@ def disconnected(client, userdata, rc):
 
 def message(client, topic, message):
     print("New message on topic {0}: {1}".format(topic, message))
+
+def blink_led():
+    feathers2.led_set(True)
+    time.sleep(0.1)
+    feathers2.led_set(False)
 
 connect_wifi()
 
@@ -130,8 +136,9 @@ try:
             sendtime = time.time()
             readings = []
 
-        # feed the dog and sleep for a bit
+        # feed the dog, blink the LED, and sleep for a bit
         w.feed()
+        blink_led()
         time.sleep(Config.sensor_interval_seconds)
 except Exception as E:
     print("got exception, rebooting in 5s: %s" % E)
