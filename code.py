@@ -6,7 +6,7 @@ import time
 import adafruit_minimqtt.adafruit_minimqtt as MQTT
 import adafruit_requests
 import board
-import feathers2
+#import feathers2
 import microcontroller
 import socketpool
 import wifi
@@ -15,7 +15,7 @@ from watchdog import WatchDogMode
 
 from config import Config
 
-VERSION = "2.4"
+VERSION = "2.5"
 UPDATEURL = "https://raw.githubusercontent.com/tykling/circuitpython-feathers2-zio-qwiic-noisesensor/main/code.py"
 
 # configure watchdog
@@ -134,7 +134,7 @@ try:
 
             # record time, blink the LED, and reset readings
             sendtime = time.time()
-            blink_led()
+            #blink_led()
             readings = []
 
         # feed the dog and sleep for a bit
