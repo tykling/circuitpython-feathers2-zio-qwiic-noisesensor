@@ -15,7 +15,7 @@ from watchdog import WatchDogMode
 
 from config import Config
 
-VERSION = "2.5"
+VERSION = "2.6"
 UPDATEURL = "https://raw.githubusercontent.com/tykling/circuitpython-feathers2-zio-qwiic-noisesensor/main/code.py"
 
 # configure watchdog
