@@ -6,7 +6,7 @@ import time
 import adafruit_minimqtt.adafruit_minimqtt as MQTT
 import adafruit_requests
 import board
-#import feathers2
+import feathers2
 import microcontroller
 import socketpool
 import wifi
@@ -134,7 +134,7 @@ try:
 
             # record time, blink the LED, and reset readings
             sendtime = time.time()
-            #blink_led()
+            blink_led()
             readings = []
 
         # feed the dog and sleep for a bit
